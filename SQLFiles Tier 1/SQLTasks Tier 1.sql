@@ -132,54 +132,40 @@ facility, the name of the member formatted as a single column, and the cost.
 Order by descending cost, and do not use any subqueries. */
 
 
-SELECT b.bookid, m.memid, CONCAT_WS( ' : ', m.firstname, m.surname ) AS fullname,
-CASE WHEN b.memid =0
+SELECT f.name as facilityName, CONCAT_WS( ' : ', m.firstname, m.surname ) AS fullname,
+CASE WHEN b.memid = 0
 THEN f.guestcost
 ELSE f.membercost
 END AS cost
 FROM Bookings AS b
 LEFT JOIN Facilities AS f ON b.facid = f.facid
-LEFT JOIN Members AS m ON b.memid
+LEFT JOIN Members AS m ON b.memid = m.memid
 WHERE b.starttime LIKE '2012-09-14%'
 AND (
 f.membercost >30
 OR f.guestcost >30
 )
+
 ORDER BY `cost` DESC
 
 /* Q9: This time, produce the same result as in Q8, but using a subquery. */
 
 
-SELECT concat_WS( ' : ', m.firstname, m.surname ) AS fullname,
-		CASE WHEN memid = 0 THEN guestcost
-			ELSE membercost END AS cost,
-		subquery.name
-FROM members as m
-INNER JOIN
-(SELECT * FROM
-      Bookings
-      LEFT JOIN Facilities ON facid
-      WHERE starttime LIKE '2012-09-14%'
-      AND (guestcost >30 OR membercost >30)
-         
-  ) AS subquery 
-ON m.memid = subquery.memid;
---WHERE (WHERE b.starttime LIKE '2012-09-14%')
+SELECT b.bookid, f.name as facilityName, CONCAT_WS( ' : ', m.firstname, m.surname ) AS fullname,
+CASE WHEN b.memid = 0 THEN f.guestcost
+				ELSE f.membercost END AS cost
+			
 
-SELECT bookid, memid, concat_WS( ' : ', firstname, surname ) AS fullname,
-		CASE WHEN memid = 0
-			THEN guestcost
-			ELSE membercost END AS cost
-FROM (SELECT * FROM
-      Bookings
-      LEFT JOIN Facilities ON facid
-      LEFT JOIN Members ON memid
-      WHERE starttime LIKE '2012-09-14%'
-      AND (guestcost >30 OR membercost >30)
-         
-  ) AS subquery 
-
---WHERE (WHERE b.starttime LIKE '2012-09-14%')
+FROM Bookings AS b
+LEFT JOIN Facilities AS f ON b.facid = f.facid
+LEFT JOIN Members AS m ON b.memid = m.memid
+INNER JOIN (SELECT bookid FROM Bookings 
+                 WHERE starttime LIKE '2012-09-14%') AS subquery
+ON b.bookid = subquery.bookid
+WHERE (f.membercost >30
+OR f.guestcost >30
+)
+ORDER BY cost DESC;
 
 
 
@@ -203,11 +189,62 @@ QUESTIONS:
 The output of facility name and total revenue, sorted by revenue. Remember
 that there's a different cost for guests and members! */
 
+
+/* trial code (not used
+SELECT bookid, name, membercost, guestcost
+FROM Bookings
+LEFT JOIN Facilities
+USING(facid);
+
+SELECT bookid, name, guestcost
+FROM Bookings
+LEFT JOIN Facilities
+USING(facid)
+WHERE memid = 0;
+*/
+--actual answer
+WITH mem AS( SELECT bookid, name, facid, membercost, guestcost
+FROM Bookings
+LEFT JOIN Facilities
+USING(facid)
+WHERE memid <> 0),
+
+guest AS (SELECT bookid, name, facid, guestcost
+FROM Bookings
+LEFT JOIN Facilities
+USING(facid)
+WHERE memid = 0)
+
+SELECT DISTINCT f.name, SUM(guest.guestcost) OVER(PARTITION BY guest.facid), SUM(mem.membercost) OVER(PARTITION BY mem.facid)
+FROM mem
+LEFT JOIN guest USING(bookid)
+LEFT JOIN Facilities AS f USING(facid)
+
 /* Q11: Produce a report of members and who recommended them in alphabetic surname,firstname order */
+
+WITH mem AS( SELECT memid, (surname || ', '|| firstname) as member, recommendedby
+FROM Members)
+
+SELECT mem.member, (m.surname  || ', '|| m.firstname) as recommender
+FROM mem 
+LEFT JOIN Members AS m
+ON mem.recommendedby = m.memid
+
+ORDER BY member
 
 
 /* Q12: Find the facilities with their usage by member, but not guests */
 
+SELECT DISTINCT f.name, COUNT(b.facid) OVER(PARTITION BY f.facid)
+FROM Facilities AS f
+LEFT JOIN Bookings AS b
+ON f.facid = b.facid
+WHERE b.memid <> 0;
 
 /* Q13: Find the facilities usage by month, but not guests */
 
+SELECT  DISTINCT f.name, strftime('%m', b.starttime), COUNT(b.facid) OVER(PARTITION BY f.facid, strftime('%m', b.starttime))
+FROM Facilities AS f
+LEFT JOIN Bookings AS b
+ON f.facid = b.facid
+WHERE b.memid <> 0
