@@ -215,11 +215,10 @@ LEFT JOIN Facilities
 USING(facid)
 WHERE memid = 0)
 
-SELECT DISTINCT f.name, SUM(guest.guestcost) OVER(PARTITION BY guest.facid), SUM(mem.membercost) OVER(PARTITION BY mem.facid)
+SELECT DISTINCT f.name, (SUM(guest.guestcost) OVER(PARTITION BY guest.facid) + SUM(mem.membercost) OVER(PARTITION BY mem.facid)) AS revenue
 FROM mem
-LEFT JOIN guest USING(bookid)
+LEFT JOIN guest USING(facid)
 LEFT JOIN Facilities AS f USING(facid)
-
 /* Q11: Produce a report of members and who recommended them in alphabetic surname,firstname order */
 
 WITH mem AS( SELECT memid, (surname || ', '|| firstname) as member, recommendedby
